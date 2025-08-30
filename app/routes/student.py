@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Body
 from fastapi.security import OAuth2PasswordRequestForm
 from datetime import timedelta
 from bson import ObjectId
+from typing import Dict, Any
 
 from app.schemas.student import StudentCreate, StudentResponse, StudentLogin
 from app.schemas.organization import Token
@@ -112,3 +113,56 @@ async def get_students_by_organization(
     students = await student_collection.find({"organization_id": ObjectId(org_id)}).to_list(1000)
     
     return students
+
+@router.get("/all", response_model=list[StudentResponse])
+async def get_all_students(
+    current_organization = Depends(get_current_organization)
+):
+    """
+    Get all students for the current organization.
+    """
+    # Get students for this organization
+    student_collection = MongoDB.get_collection(STUDENTS_COLLECTION)
+    students = await student_collection.find({"organization_id": current_organization["_id"]}).to_list(1000)
+    
+    return students
+
+@router.post("/register", response_model=StudentResponse)
+async def register_student(
+    student_data: Dict[str, Any] = Body(...),
+    current_organization = Depends(get_current_organization)
+):
+    """
+    Register a new student from the organization dashboard.
+    """
+    # Get the students collection
+    student_collection = MongoDB.get_collection(STUDENTS_COLLECTION)
+    
+    # Check if student with this student_id already exists
+    existing_student = await student_collection.find_one({"student_id": student_data["student_id"]})
+    if existing_student:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Student ID already registered"
+        )
+    
+    # Hash the password
+    hashed_password = get_password_hash(student_data["password"])
+    
+    # Create student document with organization_id from the current organization
+    student_dict = {
+        "student_id": student_data["student_id"],
+        "name": student_data["name"],
+        "email": student_data.get("email"),
+        "grade": student_data.get("grade"),
+        "organization_id": current_organization["_id"],  # Use the ObjectId directly
+        "password": hashed_password
+    }
+    
+    # Insert into database
+    result = await student_collection.insert_one(student_dict)
+    
+    # Get the created student
+    created_student = await student_collection.find_one({"_id": result.inserted_id})
+    
+    return created_student
