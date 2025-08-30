@@ -34,11 +34,13 @@ class ObjectIdAnnotation:
 PyObjectId = Annotated[ObjectId, ObjectIdAnnotation]
 
 class FileBase(BaseModel):
-    filename: str
+    original_filename: str  # Original filename as uploaded
+    display_name: Optional[str] = None  # Optional display name
     file_type: Literal["pdf", "video"]
     content_type: str
     organization_id: PyObjectId
     description: Optional[str] = None
+    tags: Optional[list[str]] = None  # Optional tags for categorization
     
 class FileCreate(FileBase):
     pass
@@ -46,9 +48,11 @@ class FileCreate(FileBase):
 class FileResponse(FileBase):
     id: PyObjectId = Field(default_factory=PyObjectId, alias="_id")
     file_path: str
+    storage_filename: str  # System-generated filename for storage
     file_size: int
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+    uploaded_by: Optional[str] = None  # Name of the person who uploaded
 
     model_config = ConfigDict(
         populate_by_name=True,

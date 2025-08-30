@@ -47,11 +47,11 @@ async def create_organization(organization: OrganizationCreate):
     return created_org
 
 @router.post("/login", response_model=Token)
-async def login_organization(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login_organization(login_data: OrganizationLogin):
     """
     Authenticate an organization and return a JWT token.
     """
-    organization = await authenticate_organization(form_data.username, form_data.password)
+    organization = await authenticate_organization(login_data.email, login_data.password)
     if not organization:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

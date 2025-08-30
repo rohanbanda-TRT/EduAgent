@@ -33,7 +33,9 @@ os.makedirs(VIDEO_DIR, exist_ok=True)
 @router.post("/upload/pdf", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_pdf(
     file: UploadFile = File(...),
+    display_name: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),  # Comma-separated tags
     current_organization = Depends(get_current_organization)
 ):
     """
@@ -46,10 +48,10 @@ async def upload_pdf(
             detail=f"File type not allowed. Must be one of: {', '.join(ALLOWED_PDF_TYPES)}"
         )
     
-    # Generate unique filename
+    # Generate unique filename for storage
     file_extension = os.path.splitext(file.filename)[1]
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(PDF_DIR, unique_filename)
+    storage_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(PDF_DIR, storage_filename)
     
     # Save file to disk
     with open(file_path, "wb") as buffer:
@@ -58,15 +60,24 @@ async def upload_pdf(
     # Get file size
     file_size = os.path.getsize(file_path)
     
+    # Process tags if provided
+    tag_list = None
+    if tags:
+        tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
+    
     # Create file document
     file_data = {
-        "filename": file.filename,
+        "original_filename": file.filename,
+        "display_name": display_name or file.filename,
         "file_type": "pdf",
         "content_type": file.content_type,
         "organization_id": current_organization["_id"],
         "description": description,
+        "tags": tag_list,
         "file_path": file_path,
+        "storage_filename": storage_filename,
         "file_size": file_size,
+        "uploaded_by": current_organization["name"],
         "created_at": datetime.now(),
         "updated_at": datetime.now()
     }
@@ -83,7 +94,9 @@ async def upload_pdf(
 @router.post("/upload/video", response_model=FileResponse, status_code=status.HTTP_201_CREATED)
 async def upload_video(
     file: UploadFile = File(...),
+    display_name: Optional[str] = Form(None),
     description: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),  # Comma-separated tags
     current_organization = Depends(get_current_organization)
 ):
     """
@@ -96,10 +109,10 @@ async def upload_video(
             detail=f"File type not allowed. Must be one of: {', '.join(ALLOWED_VIDEO_TYPES)}"
         )
     
-    # Generate unique filename
+    # Generate unique filename for storage
     file_extension = os.path.splitext(file.filename)[1]
-    unique_filename = f"{uuid.uuid4()}{file_extension}"
-    file_path = os.path.join(VIDEO_DIR, unique_filename)
+    storage_filename = f"{uuid.uuid4()}{file_extension}"
+    file_path = os.path.join(VIDEO_DIR, storage_filename)
     
     # Save file to disk
     with open(file_path, "wb") as buffer:
@@ -108,15 +121,24 @@ async def upload_video(
     # Get file size
     file_size = os.path.getsize(file_path)
     
+    # Process tags if provided
+    tag_list = None
+    if tags:
+        tag_list = [tag.strip() for tag in tags.split(',') if tag.strip()]
+    
     # Create file document
     file_data = {
-        "filename": file.filename,
+        "original_filename": file.filename,
+        "display_name": display_name or file.filename,
         "file_type": "video",
         "content_type": file.content_type,
         "organization_id": current_organization["_id"],
         "description": description,
+        "tags": tag_list,
         "file_path": file_path,
+        "storage_filename": storage_filename,
         "file_size": file_size,
+        "uploaded_by": current_organization["name"],
         "created_at": datetime.now(),
         "updated_at": datetime.now()
     }

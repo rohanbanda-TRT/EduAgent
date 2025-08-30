@@ -35,8 +35,9 @@ class ObjectIdAnnotation:
 PyObjectId = Annotated[ObjectId, ObjectIdAnnotation]
 
 class StudentBase(BaseModel):
+    student_id: str  # Custom student ID assigned by organization
     name: str
-    email: str
+    email: Optional[str] = None
     organization_id: PyObjectId
     grade: Optional[str] = None
     
@@ -44,7 +45,7 @@ class StudentCreate(StudentBase):
     password: str
 
 class StudentLogin(BaseModel):
-    email: str
+    identifier: str  # Can be either student_id or email
     password: str
 
 class StudentResponse(StudentBase):
@@ -59,6 +60,6 @@ class StudentResponse(StudentBase):
     )
 
 class TokenData(BaseModel):
-    email: Optional[str] = None
-    student_id: Optional[str] = None
+    student_id: str
+    org_id: Optional[str] = None
     is_organization: bool = False

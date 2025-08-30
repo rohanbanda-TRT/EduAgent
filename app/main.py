@@ -1,15 +1,26 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 
 # Import routes
 from app.routes import organization, student, files
 from app.database.mongodb import MongoDB
 
+# Define security scheme for Swagger UI
+security_scheme = HTTPBearer()
+
+def get_token(credentials: HTTPAuthorizationCredentials = Depends(security_scheme)):
+    return credentials.credentials
+
 app = FastAPI(
     title="EduAgent API",
     description="API for educational platform with organization and student authentication",
-    version="0.1.0"
+    version="0.1.0",
+    swagger_ui_init_oauth={
+        "usePkceWithAuthorizationCodeGrant": True,
+        "useBasicAuthenticationWithAccessCodeGrant": True
+    }
 )
 
 # Configure CORS

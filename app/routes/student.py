@@ -17,29 +17,30 @@ from app.database.mongodb import MongoDB, STUDENTS_COLLECTION, ORGANIZATIONS_COL
 
 router = APIRouter()
 
-@router.post("/signup", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
-async def create_student(student: StudentCreate):
+@router.post("/create", response_model=StudentResponse, status_code=status.HTTP_201_CREATED)
+async def create_student(
+    student: StudentCreate,
+    current_organization = Depends(get_current_organization)
+):
     """
-    Create a new student account.
+    Create a new student account. Only organizations can create students.
     """
     # Get the students collection
     student_collection = MongoDB.get_collection(STUDENTS_COLLECTION)
-    org_collection = MongoDB.get_collection(ORGANIZATIONS_COLLECTION)
     
-    # Check if student with this email already exists
-    existing_student = await student_collection.find_one({"email": student.email})
+    # Check if student with this student_id already exists
+    existing_student = await student_collection.find_one({"student_id": student.student_id})
     if existing_student:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Email already registered"
+            detail="Student ID already registered"
         )
     
-    # Check if organization exists
-    organization = await org_collection.find_one({"_id": student.organization_id})
-    if not organization:
+    # Ensure the organization_id matches the current organization
+    if str(student.organization_id) != str(current_organization["_id"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Organization not found"
+            detail="Cannot create student for another organization"
         )
     
     # Hash the password
@@ -58,15 +59,15 @@ async def create_student(student: StudentCreate):
     return created_student
 
 @router.post("/login", response_model=Token)
-async def login_student(form_data: OAuth2PasswordRequestForm = Depends()):
+async def login_student(login_data: StudentLogin):
     """
-    Authenticate a student and return a JWT token.
+    Authenticate a student using student_id or email and return a JWT token.
     """
-    student = await authenticate_student(form_data.username, form_data.password)
+    student = await authenticate_student(login_data.identifier, login_data.password)
     if not student:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail="Incorrect student ID/email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -74,8 +75,9 @@ async def login_student(form_data: OAuth2PasswordRequestForm = Depends()):
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={
-            "sub": student["email"],
-            "student_id": str(student["_id"]),
+            "sub": student["student_id"],  # Use student_id as the subject
+            "student_id": student["student_id"],
+            "org_id": str(student["organization_id"]),
             "is_organization": False
         },
         expires_delta=access_token_expires

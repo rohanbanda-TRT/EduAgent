@@ -3,7 +3,7 @@ from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import os
 from dotenv import load_dotenv
 
@@ -22,8 +22,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 30
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# OAuth2 scheme
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+# HTTP Bearer scheme for JWT authentication
+oauth2_scheme = HTTPBearer()
 
 def verify_password(plain_password, hashed_password):
     """Verify password against hashed password."""
@@ -46,10 +46,16 @@ async def authenticate_organization(email: str, password: str):
     
     return organization
 
-async def authenticate_student(email: str, password: str):
-    """Authenticate a student."""
+async def authenticate_student(identifier: str, password: str):
+    """Authenticate a student using student_id or email."""
     student_collection = MongoDB.get_collection(STUDENTS_COLLECTION)
-    student = await student_collection.find_one({"email": email})
+    
+    # Try to find student by student_id first
+    student = await student_collection.find_one({"student_id": identifier})
+    
+    # If not found by student_id, try email
+    if not student and "@" in identifier:  # Simple check if it looks like an email
+        student = await student_collection.find_one({"email": identifier})
     
     if not student:
         return False
@@ -73,7 +79,7 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     
     return encoded_jwt
 
-async def get_current_user(token: str = Depends(oauth2_scheme)):
+async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(oauth2_scheme)):
     """Get current user from JWT token."""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -82,6 +88,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
     )
     
     try:
+        token = credentials.credentials
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         email: str = payload.get("sub")
         is_organization: bool = payload.get("is_organization", False)
@@ -97,9 +104,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme)):
                 raise credentials_exception
             return {"user": user, "is_organization": True}
         else:
-            token_data = StudentTokenData(email=email, is_organization=False, student_id=payload.get("student_id"))
+            student_id = payload.get("student_id")
+            token_data = StudentTokenData(student_id=student_id, is_organization=False, org_id=payload.get("org_id"))
             collection = MongoDB.get_collection(STUDENTS_COLLECTION)
-            user = await collection.find_one({"email": email})
+            user = await collection.find_one({"student_id": student_id})
             if user is None:
                 raise credentials_exception
             return {"user": user, "is_organization": False}
