@@ -211,20 +211,24 @@ def show_organization_dashboard():
         # Upload new file
         st.subheader("Upload New File")
         file_type = st.selectbox("File Type", ["PDF", "Video"])
-        uploaded_file = st.file_uploader("Choose a file", type=["pdf", "mp4"] if file_type == "Video" else ["pdf"])
+        uploaded_file = st.file_uploader("Choose a file", type=["mp4"] if file_type == "Video" else ["pdf"])
         
         if uploaded_file is not None:
             if st.button("Upload File"):
                 try:
-                    files = {"file": uploaded_file}
+                    # Create a multipart form request with the file and metadata
+                    files = {"file": (uploaded_file.name, uploaded_file.getvalue(), 
+                             "application/pdf" if file_type == "PDF" else "video/mp4")}
+                    
                     response = requests.post(
                         f"{API_BASE_URL}/files/upload/{file_type.lower()}",
                         headers={"Authorization": f"Bearer {token}"},
                         files=files
                     )
                     
-                    if response.status_code == 200:
+                    if response.status_code in [200, 201]:
                         st.success("File uploaded successfully!")
+                        st.rerun()
                     else:
                         st.error(f"Error: {response.json().get('detail', 'Unknown error')}")
                 except Exception as e:
@@ -245,9 +249,9 @@ def show_organization_dashboard():
                     files_data = []
                     for file in files:
                         files_data.append({
-                            "File Name": file.get("filename", ""),
-                            "File Type": file.get("file_type", ""),
-                            "Uploaded At": file.get("uploaded_at", "")
+                            "File Name": file.get("display_name", file.get("original_filename", "")),
+                            "File Type": file.get("file_type", "").upper(),
+                            "Uploaded At": file.get("created_at", "").split("T")[0] if file.get("created_at") else ""
                         })
                     
                     df = pd.DataFrame(files_data)
@@ -309,9 +313,9 @@ def show_student_dashboard():
                             file = files[i + j]
                             with cols[j]:
                                 with st.container():
-                                    st.markdown(f"**{file.get('filename', 'Unnamed')}**")
-                                    st.write(f"Type: {file.get('file_type', 'Unknown')}")
-                                    st.write(f"Uploaded: {file.get('uploaded_at', 'Unknown')}")
+                                    st.markdown(f"**{file.get('display_name', file.get('original_filename', 'Unnamed'))}**")
+                                    st.write(f"Type: {file.get('file_type', 'Unknown').upper()}")
+                                    st.write(f"Uploaded: {file.get('created_at', 'Unknown').split('T')[0] if file.get('created_at') else 'Unknown'}")
                                     
                                     # Download button
                                     file_id = file.get("_id")

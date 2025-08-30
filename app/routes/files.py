@@ -173,6 +173,19 @@ async def get_files_by_organization(
     
     return files
 
+@router.get("/all", response_model=List[FileResponse])
+async def get_all_files(
+    current_organization = Depends(get_current_organization)
+):
+    """
+    Get all files for the current organization.
+    """
+    # Get files for this organization
+    file_collection = MongoDB.get_collection(FILES_COLLECTION)
+    files = await file_collection.find({"organization_id": current_organization["_id"]}).to_list(1000)
+    
+    return files
+
 @router.get("/{file_id}", response_model=FileResponse)
 async def get_file_by_id(
     file_id: str,
