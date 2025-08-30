@@ -130,7 +130,7 @@ def show_organization_dashboard():
     headers = {"Authorization": f"Bearer {token}"}
     
     # Tabs for different sections
-    tab1, tab2 = st.tabs(["Students", "Files"])
+    tab1, tab2, tab3 = st.tabs(["Students", "Files", "Document Search"])
     
     # Tab 1: Students Management
     with tab1:
@@ -282,52 +282,213 @@ def show_student_dashboard():
         st.write(f"**Email:** {user_data.get('email', 'N/A')}")
         st.write(f"**Grade:** {user_data.get('grade', 'N/A')}")
     
-    # Learning Materials
-    st.header("Learning Materials")
+    # Tabs for different sections
+    tab1, tab2 = st.tabs(["Learning Materials", "Document Search"])
     
-    # Filter options
-    file_type = st.selectbox("File Type", ["All", "PDF", "Video"])
-    
-    # Get all files
-    try:
-        response = requests.get(
-            f"{API_BASE_URL}/files/all",
-            headers=headers
-        )
+    # Tab 1: Learning Materials
+    with tab1:
+        st.header("Learning Materials")
         
-        if response.status_code == 200:
-            all_files = response.json()
+        # Filter options
+        file_type = st.selectbox("File Type", ["All", "PDF", "Video"])
+        
+        # Function to display video with suggested questions
+        def display_video_with_questions(file_id, document_id, file_name):
+            # Create tabs for video and questions
+            video_tab, questions_tab = st.tabs(["Video", "Suggested Questions"])
             
-            # Filter by type if needed
-            if file_type != "All":
-                files = [f for f in all_files if f.get("file_type", "").lower() == file_type.lower()]
-            else:
-                files = all_files
+            with video_tab:
+                # Display video using HTML
+                video_url = f"http://localhost:8000/api/files/download/video/{file_id}"
+                st.video(video_url)
             
-            if files:
-                # Display files in a grid
-                for i in range(0, len(files), 2):
-                    cols = st.columns(2)
-                    for j in range(2):
-                        if i + j < len(files):
-                            file = files[i + j]
-                            with cols[j]:
+            with questions_tab:
+                try:
+                    # Fetch suggested questions for this video
+                    questions_response = requests.get(
+                        f"{API_BASE_URL}/questions/file/{file_id}",
+                        headers={"Authorization": f"Bearer {token}"}
+                    )
+                    
+                    if questions_response.status_code == 200:
+                        questions_data = questions_response.json()
+                        
+                        if questions_data.get("segments") and len(questions_data["segments"]) > 0:
+                            st.success(f"Found {len(questions_data['segments'])} question segments for this video")
+                            
+                            # Display all questions from all segments
+                            st.markdown("### Suggested Questions")
+                            
+                            # Flatten all questions from all segments
+                            all_questions = []
+                            for segment in questions_data["segments"]:
+                                for question in segment["questions"]:
+                                    all_questions.append(question)
+                            
+                            # Display each question with its own timestamps
+                            for i, question in enumerate(all_questions):
                                 with st.container():
-                                    st.markdown(f"**{file.get('display_name', file.get('original_filename', 'Unnamed'))}**")
-                                    st.write(f"Type: {file.get('file_type', 'Unknown').upper()}")
-                                    st.write(f"Uploaded: {file.get('created_at', 'Unknown').split('T')[0] if file.get('created_at') else 'Unknown'}")
+                                    st.markdown(f"### Question {i+1}: {question['question']}")
                                     
-                                    # Download button
-                                    file_id = file.get("_id")
-                                    if file_id:
-                                        file_type = file.get("file_type", "").lower()
-                                        st.markdown(f"[Download File](http://localhost:8000/api/files/download/{file_type}/{file_id})")
+                                    # Display timestamps prominently
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.info(f"**Start Time:** {question['start_time']}")
+                                    with col2:
+                                        st.info(f"**End Time:** {question['end_time']}")
+                                    
+                                    # Display context
+                                    st.markdown("**Context:**")
+                                    st.markdown(question['context'])
+                                    
+                                    # Display segment context if available
+                                    if question.get('segment_context'):
+                                        with st.expander("View Full Transcript Segment"):
+                                            st.markdown(question['segment_context'])
+                                    
+                                    st.markdown("---")  # Add a separator between questions
+                        else:
+                            st.info("No suggested questions available for this video yet. They may still be processing.")
+                    else:
+                        st.error(f"Error fetching questions: {questions_response.json().get('detail', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"Error loading suggested questions: {str(e)}")
+    
+        # Get all files
+        try:
+            response = requests.get(
+                f"{API_BASE_URL}/files/all",
+                headers=headers
+            )
+            
+            if response.status_code == 200:
+                all_files = response.json()
+                
+                # Filter by type if needed
+                if file_type != "All":
+                    files = [f for f in all_files if f.get("file_type", "").lower() == file_type.lower()]
+                else:
+                    files = all_files
+                
+                if files:
+                    # Display files in a grid
+                    for i in range(0, len(files), 2):
+                        cols = st.columns(2)
+                        for j in range(2):
+                            if i + j < len(files):
+                                file = files[i + j]
+                                with cols[j]:
+                                        with st.container():
+                                            st.markdown(f"**{file.get('display_name', file.get('original_filename', 'Unnamed'))}**")
+                                            st.write(f"Type: {file.get('file_type', 'Unknown').upper()}")
+                                            st.write(f"Uploaded: {file.get('created_at', 'Unknown').split('T')[0] if file.get('created_at') else 'Unknown'}")
+                                            
+                                            # Download button
+                                            file_id = file.get("_id")
+                                            document_id = file.get("document_id")
+                                            if file_id:
+                                                file_type = file.get("file_type", "").lower()
+                                                
+                                                # For videos, show view button that will display video with questions
+                                                if file_type == "video":
+                                                    if st.button(f"View Video", key=f"view_{file_id}"):
+                                                        display_video_with_questions(
+                                                            file_id, 
+                                                            document_id,
+                                                            file.get('display_name', file.get('original_filename', 'Unnamed'))
+                                                        )
+                                                else:
+                                                    st.markdown(f"[Download File](http://localhost:8000/api/files/download/{file_type}/{file_id})")
+                else:
+                    st.info("No learning materials available")
             else:
-                st.info("No learning materials available")
-        else:
-            st.error(f"Error fetching materials: {response.json().get('detail', 'Unknown error')}")
-    except Exception as e:
-        st.error(f"Error: {str(e)}")
+                st.error(f"Error fetching materials: {response.json().get('detail', 'Unknown error')}")
+        except Exception as e:
+            st.error(f"Error: {str(e)}")
+    
+    # Tab 2: Document Search
+    with tab2:
+        st.header("Document Search")
+        
+        # Search form
+        search_query = st.text_input("Search Query", placeholder="Enter your search query here...")
+        col1, col2 = st.columns(2)
+        with col1:
+            file_type_filter = st.selectbox("File Type", ["All", "PDF", "Video"], key="student_search_filetype")
+        with col2:
+            max_results = st.slider("Max Results", min_value=1, max_value=20, value=5)
+        
+        # Search button
+        if st.button("Search", key="student_search_button"):
+            if search_query:
+                try:
+                    # Build query parameters
+                    params = {"query": search_query, "limit": max_results}
+                    if file_type_filter != "All":
+                        params["file_type"] = file_type_filter.lower()
+                    
+                    # Call search API
+                    response = requests.get(
+                        f"{API_BASE_URL}/search/documents",
+                        headers=headers,
+                        params=params
+                    )
+                    
+                    if response.status_code == 200:
+                        search_results = response.json()
+                        
+                        if search_results.get("status") == "success" and search_results.get("results"):
+                            st.success(f"Found {len(search_results['results'])} results")
+                            
+                            # Display results
+                            for i, result in enumerate(search_results["results"]):
+                                with st.expander(f"Result {i+1}: {result['file_info']['display_name']}"):
+                                    # Content
+                                    st.markdown("### Content")
+                                    st.markdown(result["content"])
+                                    
+                                    # Metadata
+                                    st.markdown("### Metadata")
+                                    col1, col2 = st.columns(2)
+                                    with col1:
+                                        st.write(f"**File:** {result['file_info']['display_name']}")
+                                        st.write(f"**Type:** {result['file_info']['file_type'].upper()}")
+                                    with col2:
+                                        st.write(f"**Relevance Score:** {result['score']:.4f}")
+                                        
+                                        # For PDF, show page number
+                                        if "page" in result["metadata"]:
+                                            st.write(f"**Page:** {result['metadata']['page']}")
+                                        
+                                        # For video, show timestamp
+                                        if "timestamp_metadata" in result["metadata"]:
+                                            import json
+                                            timestamp_data = json.loads(result["metadata"]["timestamp_metadata"])
+                                            
+                                            # Display timestamp more prominently
+                                            st.markdown("### Timestamp Information")
+                                            col1, col2 = st.columns(2)
+                                            with col1:
+                                                st.info(f"**Start Time:** {timestamp_data.get('start_time', 'N/A')}")
+                                            with col2:
+                                                st.info(f"**End Time:** {timestamp_data.get('end_time', 'N/A')}")
+                                            
+                                            # Add button to view video with questions
+                                            if result["file_info"]["file_type"] == "video":
+                                                if st.button(f"View Video with Questions", key=f"search_view_{result['file_info']['_id']}"):
+                                                    display_video_with_questions(
+                                                        result['file_info']['_id'],
+                                                        result['file_info']['document_id'],
+                                                        result['file_info']['display_name']
+                                                    )
+                        else:
+                            st.info("No results found. Try a different search query.")
+                    else:
+                        st.error(f"Error searching documents: {response.json().get('detail', 'Unknown error')}")
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+            else:
+                st.warning("Please enter a search query")
 
 def main():
     """Main application logic"""

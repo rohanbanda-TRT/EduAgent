@@ -14,6 +14,7 @@ DB_NAME = os.getenv("DB_NAME", "eduagent")
 ORGANIZATIONS_COLLECTION = "organizations"
 STUDENTS_COLLECTION = "students"
 FILES_COLLECTION = "files"
+SUGGESTED_QUESTIONS_COLLECTION = "suggested_questions"
 
 class MongoDB:
     client = None

@@ -53,6 +53,11 @@ class FileResponse(FileBase):
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
     uploaded_by: Optional[str] = None  # Name of the person who uploaded
+    document_id: Optional[str] = None  # UUID for document processing
+    processing_status: Optional[str] = None  # Status of document processing (success, error, warning)
+    processing_message: Optional[str] = None  # Message from document processing
+    chunks_created: Optional[int] = None  # Number of chunks created during processing
+    total_pages: Optional[int] = None  # Total pages for PDF documents
 
     model_config = ConfigDict(
         populate_by_name=True,

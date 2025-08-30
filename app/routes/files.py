@@ -9,8 +9,12 @@ import uuid
 from app.schemas.file import FileCreate, FileResponse
 from app.utils.auth import get_current_organization
 from app.database.mongodb import MongoDB, FILES_COLLECTION
+from app.utils.document_processor import DocumentProcessor
 
 router = APIRouter()
+
+# Initialize document processor
+document_processor = DocumentProcessor()
 
 # Define allowed file types
 ALLOWED_PDF_TYPES = ["application/pdf"]
@@ -82,6 +86,21 @@ async def upload_pdf(
         "updated_at": datetime.now()
     }
     
+    # Process the PDF document
+    document_id = str(uuid.uuid4())
+    process_result = document_processor.process_pdf(
+        file_path=file_path,
+        document_id=document_id,
+        original_filename=file.filename
+    )
+    
+    # Add processing results to file data
+    file_data["document_id"] = document_id
+    file_data["processing_status"] = process_result["status"]
+    file_data["processing_message"] = process_result["message"]
+    file_data["chunks_created"] = process_result.get("chunks_created", 0)
+    file_data["total_pages"] = process_result.get("total_pages", 0)
+    
     # Insert into database
     file_collection = MongoDB.get_collection(FILES_COLLECTION)
     result = await file_collection.insert_one(file_data)
@@ -143,11 +162,42 @@ async def upload_video(
         "updated_at": datetime.now()
     }
     
+    # Process the video document
+    document_id = str(uuid.uuid4())
+    
+    # Insert into database first to get the file_id
+    file_data["document_id"] = document_id
+    file_data["processing_status"] = "processing"
+    file_data["processing_message"] = "Video processing started"
+    
     # Insert into database
     file_collection = MongoDB.get_collection(FILES_COLLECTION)
     result = await file_collection.insert_one(file_data)
+    file_id = str(result.inserted_id)
     
-    # Get the created file record
+    # Now process the video with the file_id and organization_id
+    process_result = await document_processor.process_video(
+        file_path=file_path,
+        document_id=document_id,
+        original_filename=file.filename,
+        file_id=file_id,
+        organization_id=str(current_organization["_id"]),
+        display_name=display_name or file.filename
+    )
+    
+    # Update file data with processing results
+    update_data = {
+        "processing_status": process_result["status"],
+        "processing_message": process_result["message"],
+        "chunks_created": process_result.get("chunks_created", 0),
+        "questions_segments": process_result.get("questions_segments", 0),
+        "updated_at": datetime.now()
+    }
+    
+    # Update the file record
+    await file_collection.update_one({"_id": result.inserted_id}, {"$set": update_data})
+    
+    # Get the updated file record
     created_file = await file_collection.find_one({"_id": result.inserted_id})
     
     return created_file

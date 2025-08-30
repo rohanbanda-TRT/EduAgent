@@ -4,7 +4,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import uvicorn
 
 # Import routes
-from app.routes import organization, student, files
+from app.routes import organization, student, files, search, questions
 from app.database.mongodb import MongoDB
 
 # Define security scheme for Swagger UI
@@ -45,6 +45,8 @@ async def shutdown_db_client():
 app.include_router(organization.router, prefix="/api/organization", tags=["Organization"])
 app.include_router(student.router, prefix="/api/student", tags=["Student"])
 app.include_router(files.router, prefix="/api/files", tags=["Files"])
+app.include_router(search.router, prefix="/api/search", tags=["Search"])
+app.include_router(questions.router, prefix="/api/questions", tags=["Questions"])
 
 @app.get("/")
 async def root():
